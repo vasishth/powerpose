@@ -1,0 +1,117 @@
+---
+title: "Analysis of power pose data"
+author: "Shravan Vasishth"
+date: "1 October 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load and prepare data
+
+```{r}
+## original data (not used here)
+dato<-read.csv("ccy-source-data.csv",header=TRUE)
+## cleaned data
+datc<-read.csv("ccy-clean-data.csv",header=TRUE)
+
+## sanity check: one subject, one row
+dim(datc)
+length(unique(datc$id))
+
+#drop ineligible and something else as in stata code:
+datc<-subset(datc,inelig!="Ineligible (drop)" & anyoutv1!="Selected")
+```
+
+# Examine male and female testosterone
+
+```{r}
+## subset males and females
+males<-subset(datc,female=="Male")
+females<-subset(datc,female=="Female")
+## initial testosterone:
+summary(males$testm1)
+summary(females$testm1)
+
+## after:
+summary(males$testm2)
+summary(females$testm2)
+```
+
+# Calculate mean post-treatment testosterone
+
+```{r}
+round(with(datc,tapply(testm2,IND=list(female,hptreat),mean)))
+round(with(datc,tapply(testm2,IND=list(hptreat),mean)))
+
+## difference scores:
+round(with(datc,tapply(testm2-testm1,IND=list(female,hptreat),mean)))
+round(with(datc,tapply(testm2-testm1,IND=list(hptreat),mean)))
+```
+
+# Analyze testosterone
+
+```{r}
+## center all predictors
+datc$ctestm1<-scale(datc$testm1,scale=F)
+datc$chptreat<-ifelse(datc$hptreat=="High",1,-1)
+datc$cortm1<-scale(datc$cortm1,scale=F)
+datc$cortm2<-scale(datc$cortm2,scale=F)
+datc$female<-ifelse(datc$female=="Female",1,-1)
+
+## Fosse result:
+summary(m0<-lm(testm2~ctestm1+chptreat+cortm1+cortm2+female,datc))
+summary(m0a<-lm(testm2~ctestm1+cortm1+cortm2+female,datc))
+
+## effect on testosterone of power posing:
+anova(m0,m0a)
+
+## with interaction with gender:
+summary(m1<-lm(testm2~ctestm1+chptreat+cortm1+cortm2+female+chptreat:female,datc))
+summary(m1a<-lm(testm2~ctestm1+cortm1+cortm2+female+chptreat:female,datc))
+anova(m1,m1a)
+```
+
+```{r}
+library(car)
+qqPlot(residuals(m1))
+```
+
+Analyzing the data using change in testosterone:
+
+```{r}
+datc$change<-datc$testm2-datc$testm1
+summary(m1<-lm(change~chptreat+cortm1+cortm2+female,datc))
+summary(m2<-lm(change~chptreat+cortm1+cortm2+female+chptreat:female,datc))
+```
+
+Do people with low initial testosterone have higher changes due to manipulation (ignoring whether they got low or high power pose condition for now)?
+
+```{r}
+plot(change~testm1,datc,xlab="initial testosterone")
+m5<-lm(change~testm1,datc)
+abline(coef(m5))
+
+summary(m5)
+
+m5males<-lm(change~testm1,males)
+
+
+## removing extreme values
+m6<-lm(change~testm1,subset(datc,testm1<100))
+abline(coef(m6),col="red")
+
+summary(m6)
+
+m7<-lm(change~testm1,subset(datc,change>-40))
+abline(coef(m7),col="blue",lty=2)
+
+summary(m7)
+```
+
+```{r echo=FALSE}
+library(markdown)
+rpubsUpload("Power posing", "powerpose.html")
+```
