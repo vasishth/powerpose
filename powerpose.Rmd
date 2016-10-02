@@ -12,8 +12,6 @@ knitr::opts_chunk$set(echo = TRUE)
 # Load and prepare data
 
 ```{r}
-## original data (not used here)
-dato<-read.csv("ccy-source-data.csv",header=TRUE)
 ## cleaned data
 datc<-read.csv("ccy-clean-data.csv",header=TRUE)
 
@@ -25,33 +23,74 @@ length(unique(datc$id))
 datc<-subset(datc,inelig!="Ineligible (drop)" & anyoutv1!="Selected")
 ```
 
-# Examine male and female testosterone
+# Examine male and female testosterone levels
 
 ```{r}
 ## subset males and females
 males<-subset(datc,female=="Male")
 females<-subset(datc,female=="Female")
+
 ## initial testosterone:
 summary(males$testm1)
 summary(females$testm1)
 
-## after:
+## after treatment:
 summary(males$testm2)
 summary(females$testm2)
 ```
 
-# Calculate mean post-treatment testosterone
+# Calculate mean post-treatment testosterone by gender
 
 ```{r}
 round(with(datc,tapply(testm2,IND=list(female,hptreat),mean)))
 round(with(datc,tapply(testm2,IND=list(hptreat),mean)))
-
-## difference scores:
-round(with(datc,tapply(testm2-testm1,IND=list(female,hptreat),mean)))
-round(with(datc,tapply(testm2-testm1,IND=list(hptreat),mean)))
 ```
 
-# Analyze testosterone
+By how much did testosterone increase after treatment? Means by gender.
+
+```{r}
+## difference scores:
+round(with(datc,tapply(testm2-testm1,IND=list(female,hptreat),mean)))
+```
+
+Means ignoring gender: here is the rough and ready version of fig 3 of the paper.
+The effects are a bit smaller in this data-set than the published result, probably because of the statistician's cleaning up of the data.
+
+```{r}
+(means<-round(with(datc,tapply(testm2-testm1,IND=hptreat,mean))))
+(sds<-with(datc,tapply(testm2-testm1,IND=hptreat,sd)))
+n<-length(datc$testm2)
+ses<-sds/sqrt(n)
+
+barplot(means,ylim=c(-15,15))
+arrows(x0=.75,x1=.75,y0=means[1]-1.96*ses[1],y1=means[1]+1.96*ses[1],angle=90,code=3)
+arrows(x0=1.9,x1=1.9,y0=means[2]-1.96*ses[2],y1=means[2]+1.96*ses[2],angle=90,code=3)
+```
+
+One could do a two-sample t-test like this:
+
+```{r}
+diff<-datc$testm2-datc$testm1
+treatment<-datc$hptreat
+diff_df<-data.frame(diff=diff,treatment=treatment)
+lowdiff<-subset(diff_df,treatment=="Low")
+highdiff<-subset(diff_df,treatment=="High")
+op<-par(mfrow=c(1,2),pty="s")
+boxplot(lowdiff$diff,main="Low",ylim=c(-50,40))
+boxplot(highdiff$diff,main="High",ylim=c(-50,40))
+t.test(lowdiff$diff,highdiff$diff)
+```
+
+The bummer here is that there is actually no evidence of power posing. 
+Cuddy's Ted talk was based on a lie about the data.
+
+# Analyze testosterone using linear models
+
+Now, we will refit the model using various predictors: the initial 
+testosterone value, the initial and final cortisone (?) levels, and 
+the gender of the subject. The question we ask here is, is post-treatment
+testosterone higher for subjects exposed to high vs low power, controlling
+for these variables?
 
 ```{r}
 ## center all predictors
@@ -61,48 +100,28 @@ datc$cortm1<-scale(datc$cortm1,scale=F)
 datc$cortm2<-scale(datc$cortm2,scale=F)
 datc$female<-ifelse(datc$female=="Female",1,-1)
 
-## Fosse result:
+## This is the result that Fosse, Cuddy's statistician, found:
 summary(m0<-lm(testm2~ctestm1+chptreat+cortm1+cortm2+female,datc))
 summary(m0a<-lm(testm2~ctestm1+cortm1+cortm2+female,datc))
-
 ## effect on testosterone of power posing:
 anova(m0,m0a)
 
-## with interaction with gender:
+## with interaction with gender, the effect disappears:
 summary(m1<-lm(testm2~ctestm1+chptreat+cortm1+cortm2+female+chptreat:female,datc))
-summary(m1a<-lm(testm2~ctestm1+cortm1+cortm2+female+chptreat:female,datc))
+summary(m1a<-lm(testm2~ctestm1        +cortm1+cortm2+female+chptreat:female,datc))
 anova(m1,m1a)
 ```
 
-```{r}
-library(car)
-qqPlot(residuals(m1))
-```
+# Analyzing the data using change in testosterone
 
-Analyzing the data using change in testosterone:
+We could also have as dependent measure the change in testosterone in low vs high power subjects. This corresponds to the Fig 3 question.
 
 ```{r}
 datc$change<-datc$testm2-datc$testm1
-summary(m1<-lm(change~chptreat+cortm1+cortm2+female,datc))
-summary(m2<-lm(change~chptreat+cortm1+cortm2+female+chptreat:female,datc))
+
+summary(m2<-lm(change~chptreat+cortm1+cortm2+female,datc))
+summary(m2a<-lm(change~cortm1+cortm2+female,datc))
+anova(m2,m2a) ## no effect
 ```
 
-Do people with low initial testosterone have higher changes due to manipulation (ignoring whether they got low or high power pose condition for now)?
-
-```{r}
-plot(change~testm1,datc,xlab="initial testosterone")
-m5<-lm(change~testm1,datc)
-abline(coef(m5))
-
-## removing extreme values
-m6<-lm(change~testm1,subset(datc,testm1<100))
-abline(coef(m6),col="red")
-
-m7<-lm(change~testm1,subset(datc,change>-40))
-abline(coef(m7),col="blue",lty=2)
-```
-
-```{r echo=FALSE}
-library(markdown)
-rpubsUpload("Power posing", "powerpose.html")
-```
+So, in fact, both the t-test and the likelihood ratio test show that there is *no* evidence in the Cuddy data for power posing raising testosterone. Her Ted talk was based on a fictional claim.
