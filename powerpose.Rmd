@@ -1,7 +1,7 @@
 ---
 title: "Analysis of power pose data"
 author: "Shravan Vasishth"
-date: "1 October 2016"
+date: "5 October 2016"
 output: html_document
 ---
 
@@ -39,7 +39,7 @@ summary(males$testm2)
 summary(females$testm2)
 ```
 
-# Calculate mean post-treatment testosterone by gender
+# Calculate mean post-treatment testosterone by gender, and ignoring gender:
 
 ```{r}
 round(with(datc,tapply(testm2,IND=list(female,hptreat),mean)))
@@ -74,18 +74,19 @@ One could do a two-sample t-test as shown below. Note the high variability in th
 diff<-datc$testm2-datc$testm1
 ## make data frame with differences as DV:
 treatment<-datc$hptreat
-diff_df<-data.frame(diff=diff,treatment=treatment)
+diff_df<-data.frame(subj=1:length(treatment),diff=diff,treatment=treatment)
+
 ## subset low and high pose subjects' data:
 lowdiff<-subset(diff_df,treatment=="Low")
 highdiff<-subset(diff_df,treatment=="High")
 
 ## graphical summary of distributions:
 op<-par(mfrow=c(1,2),pty="s")
-boxplot(lowdiff$diff,main="Low",ylim=c(-50,40))
-boxplot(highdiff$diff,main="High",ylim=c(-50,40))
+boxplot(lowdiff$diff,main="Low",ylim=c(-50,50))
+boxplot(highdiff$diff,main="High",ylim=c(-50,50))
 
 ## t-test, two sample:
-t.test(lowdiff$diff,highdiff$diff)
+t.test(highdiff$diff,lowdiff$diff)
 ```
 
 The bummer here is that there is actually no evidence of power posing. 
@@ -128,9 +129,19 @@ We could also have as dependent measure the change in testosterone in low vs hig
 ```{r}
 datc$change<-datc$testm2-datc$testm1
 
-summary(m2<-lm(change~chptreat+cortm1+cortm2+female,datc))
-summary(m2a<-lm(change~cortm1+cortm2+female,datc))
-anova(m2,m2a) ## no effect
+summary(m2<-lm(change~1,datc))
+summary(m2a<-lm(change~chptreat,datc))
+anova(m2,m2a)
+
+## taking gender into account
+summary(m3<-lm(change~female,datc))
+summary(m3a<-lm(change~chptreat+female,datc))
+anova(m4,m4a) ## no effect
+
+## taking interaction between treatment and gender into account
+summary(m4<-lm(change~female,datc))
+summary(m4a<-lm(change~chptreat*female,datc))
+anova(m3,m3a) ## no effect
 ```
 
 So, the linear model also shows no effect of power posing on change in testosterone.
