@@ -136,16 +136,58 @@ anova(m2,m2a)
 ## taking gender into account
 summary(m3<-lm(change~female,datc))
 summary(m3a<-lm(change~chptreat+female,datc))
-anova(m4,m4a) ## no effect
+anova(m3,m3a) ## no effect
 
 ## taking interaction between treatment and gender into account
 summary(m4<-lm(change~female,datc))
 summary(m4a<-lm(change~chptreat*female,datc))
-anova(m3,m3a) ## no effect
+anova(m4,m4a) ## no effect
 ```
 
 So, the linear model also shows no effect of power posing on change in testosterone.
 
+
+# Stan analysis
+
+For now, I just fit the change model, with gender as predictor (including interaction with treatment).
+The priors probably need some more thought.
+
+```{r}
+dat<-list(change=datc$change,
+          female=datc$female,
+          treatment=datc$chptreat,
+          N=length(datc$change))
+
+library(rstan)
+library(parallel)
+rstan_options(auto_write=TRUE)
+options(mc.cores=parallel::detectCores())
+
+output <- stanc("linearmodel.stan")
+
+fit <- stan(file='linearmodel.stan', data=dat,
+            iter=2000, chains=4, seed=4938483,
+            control = list(adapt_delta = 0.8))
+
+paramnames<-c("alpha","beta_female","beta_treatment","beta_interaction")
+```
+
+```{r}
+print(fit,pars=paramnames)
+fit_matrix<-as.matrix(fit)
+(prob<-mean(fit_matrix[,3]>0))
+```
+
+```{r}
+params<-extract(fit,pars=paramnames)
+
+stan_plot(fit,pars=paramnames)
+
+stan_hist(fit,pars=paramnames)
+```
+
 # Summary
 
 Both the t-test and the likelihood ratio test show that there is *no* evidence in the Cuddy data for power posing raising testosterone. Cuddy's Ted talk was based on a fictional claim.
+
+The Stan model shows that one could argue that there is some weak evidence for testosterone going up when one holds a high power pose. There is a 95% probability of the treatment coefficient being positive. 
