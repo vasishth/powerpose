@@ -81,10 +81,16 @@ lowdiff<-subset(diff_df,treatment=="Low")
 highdiff<-subset(diff_df,treatment=="High")
 
 ## graphical summary of distributions:
-op<-par(mfrow=c(1,2),pty="s")
-boxplot(lowdiff$diff,main="Low",ylim=c(-50,50))
-boxplot(highdiff$diff,main="High",ylim=c(-50,50))
+op<-par(mfrow=c(2,2),pty="s")
+boxplot(lowdiff$diff,main="Low",ylim=c(-50,50),ylab="change in testosterone")
+boxplot(highdiff$diff,main="High",ylim=c(-50,50),ylab="change in testosterone")
+barplot(lowdiff$diff,main="Low",ylim=c(-50,50),ylab="change in testosterone")
+barplot(highdiff$diff,main="High",ylim=c(-50,50),ylab="change in testosterone")
+```
 
+Two-sample t-test:
+
+```{r}
 ## t-test, two sample:
 t.test(highdiff$diff,lowdiff$diff)
 ```
@@ -163,13 +169,16 @@ library(parallel)
 rstan_options(auto_write=TRUE)
 options(mc.cores=parallel::detectCores())
 
-output <- stanc("linearmodel.stan")
+## cauchy priors on beta params:
+#output <- stanc("linearmodel.stan")
+## normal priors N(0,20) on beta params:
+output <- stanc("linearmodel_normalpriors.stan")
 
-fit <- stan(file='linearmodel.stan', data=dat,
+fit <- stan(file='linearmodel_normalpriors.stan', data=dat,
             iter=2000, chains=4, seed=4938483,
             control = list(adapt_delta = 0.8))
 
-paramnames<-c("alpha","beta_female","beta_treatment","beta_interaction")
+paramnames<-c("alpha","beta_female","beta_treatment","beta_interaction","sigma")
 ```
 
 ```{r}
@@ -190,4 +199,4 @@ stan_hist(fit,pars=paramnames)
 
 Both the t-test and the likelihood ratio test show that there is *no* evidence in the Cuddy data for power posing raising testosterone. Cuddy's Ted talk was based on a fictional claim.
 
-The Stan model shows that one could argue that there is some weak evidence for testosterone going up when one holds a high power pose. There is a 95% probability of the treatment coefficient being positive. 
+The Stan model shows that one could argue that there is some weak evidence for testosterone going up when one holds a high power pose. There is a 95% probability of the treatment coefficient being positive, with 95% credible interval [-0.78, 12.11]. 
